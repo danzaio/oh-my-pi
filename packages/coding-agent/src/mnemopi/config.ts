@@ -6,7 +6,7 @@ import * as git from "../utils/git";
 
 export type MnemopiLlmMode = "none" | "smol" | "remote";
 
-export type MnemopiScoping = "global" | "per-project" | "per-project-tagged";
+export type MnemopiScoping = "global" | "per-project" | "per-project-tagged" | "per-repository";
 
 export type MnemopiProviderOptions = Pick<
 	MnemopiOptions,
@@ -92,7 +92,7 @@ interface MnemopiBankScope {
 // Mnemopi does not have built-in tag-filtered recall, so `per-project-tagged`
 // maps to a project-local write bank plus a shared recall-visible bank.
 function resolveBankScope(configured: string | undefined, cwd: string, scoping: MnemopiScoping): MnemopiBankScope {
-	const project = projectBank(configured, cwd);
+	const project = scoping === "per-repository" ? repositoryBank(configured, cwd) : projectBank(configured, cwd);
 	const globalBank = sharedBank(configured);
 	switch (scoping) {
 		case "global":
@@ -103,6 +103,7 @@ function resolveBankScope(configured: string | undefined, cwd: string, scoping: 
 				retainBank: globalBank,
 				recallBanks: [globalBank],
 			};
+		case "per-repository":
 		case "per-project":
 			return {
 				baseBank: globalBank,
@@ -129,6 +130,16 @@ function sharedBank(configured: string | undefined): string {
 function projectBank(configured: string | undefined, cwd: string): string {
 	const projectRoot = git.repo.resolveSync(cwd)?.repoRoot ?? path.resolve(cwd);
 	const project = projectBankSegment(projectRoot);
+	const base = sanitizeBankName(configured);
+	return limitBankName(base ? `${base}-${project}` : project);
+}
+
+function repositoryBank(configured: string | undefined, cwd: string): string {
+	const repository = git.repo.resolveSync(cwd);
+	if (!repository) return projectBank(configured, cwd);
+	const baseName = path.basename(path.dirname(repository.commonDir)) || path.basename(repository.repoRoot);
+	const repositoryName = sanitizeBankName(baseName) ?? "default";
+	const project = limitBankName(`${repositoryName}-${Bun.hash(path.resolve(repository.commonDir)).toString(36)}`);
 	const base = sanitizeBankName(configured);
 	return limitBankName(base ? `${base}-${project}` : project);
 }

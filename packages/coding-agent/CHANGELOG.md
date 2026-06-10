@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `mnemopi.scoping: per-repository` to share a memory bank across linked git worktrees for the same repository ([#2253](https://github.com/can1357/oh-my-pi/issues/2253)).
+
 ## [15.11.0] - 2026-06-10
 
 ### Breaking Changes

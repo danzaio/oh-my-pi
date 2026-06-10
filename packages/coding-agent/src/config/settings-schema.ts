@@ -1436,13 +1436,13 @@ export const SETTINGS_SCHEMA = {
 	},
 	"mnemopi.scoping": {
 		type: "enum",
-		values: ["global", "per-project", "per-project-tagged"] as const,
+		values: ["global", "per-project", "per-project-tagged", "per-repository"] as const,
 		default: "per-project",
 		ui: {
 			tab: "memory",
 			label: "Mnemopi Scoping",
 			description:
-				"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = project-local writes plus global recall visibility",
+				"global = one shared bank; per-project = isolated bank per cwd; per-repository = shared across linked worktrees; per-project-tagged = project-local writes plus global recall visibility",
 			options: [
 				{
 					value: "global",
@@ -1453,6 +1453,11 @@ export const SETTINGS_SCHEMA = {
 					value: "per-project",
 					label: "Per project",
 					description: "Project-local Mnemopi bank per cwd basename",
+				},
+				{
+					value: "per-repository",
+					label: "Per repository",
+					description: "One Mnemopi bank per git repository, shared across linked worktrees",
 				},
 				{
 					value: "per-project-tagged",

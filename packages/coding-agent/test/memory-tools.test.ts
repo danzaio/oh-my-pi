@@ -631,6 +631,32 @@ describe("Mnemopi backend lifecycle", () => {
 			rmSync(root, { recursive: true, force: true });
 		}
 	});
+
+	it("can scope mnemopi banks to the repository across linked worktrees", async () => {
+		const root = path.join(tmpdir(), `mnemopi-repo-scope-${Date.now()}`);
+		const main = path.join(root, "repo");
+		const linked = path.join(root, "repo-linked");
+		mkdirSync(main, { recursive: true });
+		try {
+			await Bun.$`git init`.cwd(main).quiet();
+			await Bun.write(path.join(main, "README.md"), "test");
+			await Bun.$`git add README.md`.cwd(main).quiet();
+			await Bun.$`git -c user.name=test -c user.email=test@example.com commit -m init`.cwd(main).quiet();
+			await Bun.$`git worktree add ${linked}`.cwd(main).quiet();
+
+			const base = Settings.isolated({
+				"memory.backend": "mnemopi",
+				"mnemopi.scoping": "per-repository",
+			});
+			const mainConfig = loadMnemopiConfig(await base.cloneForCwd(main), root);
+			const linkedConfig = loadMnemopiConfig(await base.cloneForCwd(linked), root);
+
+			expect(mainConfig.bank).toBe(linkedConfig.bank);
+			expect(mainConfig.recallBanks).toEqual([mainConfig.bank]);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
 });
 describe("recall.execute", () => {
 	beforeEach(() => {
