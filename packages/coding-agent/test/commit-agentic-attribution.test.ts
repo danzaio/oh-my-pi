@@ -46,4 +46,46 @@ describe("commit agent prompt attribution", () => {
 			expect(prompt.options?.expandPromptTemplates).toBe(false);
 		}
 	});
+
+	it("applies configured commit system prompt layers in order", async () => {
+		let capturedSystemPrompt: string[] | undefined;
+		const session = {
+			prompt: async () => {},
+			subscribe: () => () => {},
+			dispose: async () => {},
+		};
+
+		vi.spyOn(sdkModule, "createAgentSession").mockImplementation(async options => {
+			if (!Array.isArray(options?.systemPrompt)) throw new Error("Expected string-array system prompt");
+			capturedSystemPrompt = options.systemPrompt;
+			return { session } as unknown as CreateAgentSessionResult;
+		});
+		vi.spyOn(toolsModule, "createCommitTools").mockReturnValue([]);
+
+		const model = getBundledModel("anthropic", "claude-sonnet-4-5");
+		if (!model) {
+			throw new Error("Expected claude-sonnet-4-5 model to exist");
+		}
+
+		const settings = Settings.isolated({
+			"commit.systemPrompt.layers": [
+				{ source: "inline", content: "Project rule", position: "append" },
+				{ source: "inline", content: "Safety preface", position: "prepend" },
+			],
+		});
+
+		await runCommitAgentSession({
+			cwd: "/tmp",
+			model,
+			settings,
+			modelRegistry: {} as never,
+			authStorage: {} as never,
+			changelogTargets: [],
+			requireChangelog: false,
+		});
+
+		expect(capturedSystemPrompt?.[0]).toBe("Safety preface");
+		expect(capturedSystemPrompt?.at(-1)).toBe("Project rule");
+		expect(capturedSystemPrompt?.join("\n")).toContain("propose_commit");
+	});
 });

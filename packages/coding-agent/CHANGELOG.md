@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `commit.systemPrompt.layers[]` config for explicit inline/file commit-agent system prompt layering without changing the commit agent tool surface ([#2259](https://github.com/can1357/oh-my-pi/issues/2259)).
+
 ## [15.11.0] - 2026-06-10
 
 ### Breaking Changes

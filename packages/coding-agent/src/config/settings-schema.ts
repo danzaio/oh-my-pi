@@ -213,6 +213,10 @@ const EMPTY_STRING_RECORD: Record<string, string> = {};
 const DEFAULT_CYCLE_ORDER: string[] = ["smol", "default", "slow"];
 const EMPTY_MODEL_TAGS_RECORD: ModelTagsSettings = {};
 const HINDSIGHT_RECALL_TYPES_DEFAULT: string[] = ["world", "experience"];
+const EMPTY_COMMIT_SYSTEM_PROMPT_LAYERS: CommitSystemPromptLayer[] = [];
+export type CommitSystemPromptLayer =
+	| { source: "inline"; content: string; position?: "append" | "prepend" | "replace" }
+	| { source: "file"; path: string; position?: "append" | "prepend" | "replace" };
 export const DEFAULT_BASH_INTERCEPTOR_RULES: BashInterceptorRule[] = [
 	{
 		pattern: "^\\s*(cat|head|tail|less|more)\\s+",
@@ -2062,6 +2066,11 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"commit.systemPrompt.layers": {
+		type: "array",
+		default: EMPTY_COMMIT_SYSTEM_PROMPT_LAYERS,
+	},
+
 	// Shell output minimizer
 	"shellMinimizer.enabled": {
 		type: "boolean",
@@ -3443,6 +3452,9 @@ export interface CommitSettings {
 	mapReduceTimeoutMs: number;
 	mapReduceMaxConcurrency: number;
 	changelogMaxDiffChars: number;
+	systemPrompt: {
+		layers: CommitSystemPromptLayer[];
+	};
 }
 
 export interface TtsrSettings {

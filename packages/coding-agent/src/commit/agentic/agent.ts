@@ -1,3 +1,5 @@
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import { INTENT_FIELD, type ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
 import { Markdown } from "@oh-my-pi/pi-tui";
@@ -15,6 +17,36 @@ import agentSystemPrompt from "./prompts/system.md" with { type: "text" };
 import type { CommitAgentState } from "./state";
 import { createCommitTools } from "./tools";
 
+type CommitSystemPromptLayer = {
+	source?: unknown;
+	content?: unknown;
+	path?: unknown;
+	position?: unknown;
+};
+
+async function resolveCommitSystemPromptLayers(cwd: string, settings: Settings, basePrompt: string): Promise<string[]> {
+	const layers = settings.get("commit.systemPrompt.layers") as CommitSystemPromptLayer[];
+	let prompts = [basePrompt];
+	for (const layer of layers) {
+		const position = layer.position === "prepend" || layer.position === "replace" ? layer.position : "append";
+		let content: string | undefined;
+		if (layer.source === "inline" && typeof layer.content === "string") {
+			content = layer.content;
+		} else if (layer.source === "file" && typeof layer.path === "string") {
+			const layerPath = path.isAbsolute(layer.path) ? layer.path : path.resolve(cwd, layer.path);
+			content = await fs.readFile(layerPath, "utf8");
+		}
+		if (!content?.trim()) continue;
+		if (position === "replace") {
+			prompts = [content];
+		} else if (position === "prepend") {
+			prompts.unshift(content);
+		} else {
+			prompts.push(content);
+		}
+	}
+	return prompts;
+}
 export interface CommitAgentInput {
 	cwd: string;
 	model: Model<Api>;
@@ -60,7 +92,7 @@ export async function runCommitAgentSession(input: CommitAgentInput): Promise<Co
 		settings: input.settings,
 		model: input.model,
 		thinkingLevel: input.thinkingLevel,
-		systemPrompt: [systemPrompt],
+		systemPrompt: await resolveCommitSystemPromptLayers(input.cwd, input.settings, systemPrompt),
 		customTools: tools,
 		enableLsp: false,
 		enableMCP: false,
