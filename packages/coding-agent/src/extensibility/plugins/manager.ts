@@ -105,6 +105,8 @@ export class PluginManager {
 		if (!this.#runtimeConfig) {
 			this.#runtimeConfig = await this.#loadRuntimeConfig();
 		}
+		this.#runtimeConfig.plugins ??= {};
+		this.#runtimeConfig.settings ??= {};
 		return this.#runtimeConfig;
 	}
 

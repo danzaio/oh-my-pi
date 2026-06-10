@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed plugin config list/set/delete paths crashing on legacy plugin lockfiles that predate the top-level `settings` object ([#2236](https://github.com/can1357/oh-my-pi/issues/2236)).
+
 ## [15.11.0] - 2026-06-10
 
 ### Breaking Changes
