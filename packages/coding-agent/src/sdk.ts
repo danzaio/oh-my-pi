@@ -137,6 +137,7 @@ import {
 	resolveProvisionalAutoLevel,
 	resolveThinkingLevelForModel,
 	shouldDisableReasoning,
+	shouldHideThinkingBlock,
 	toReasoningEffort,
 } from "./thinking";
 import { countToolsForAutoDiscovery, resolveEffectiveToolDiscoveryMode } from "./tool-discovery/mode";
@@ -2208,7 +2209,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			presencePenalty: settings.get("presencePenalty") >= 0 ? settings.get("presencePenalty") : undefined,
 			repetitionPenalty: settings.get("repetitionPenalty") >= 0 ? settings.get("repetitionPenalty") : undefined,
 			serviceTier: initialServiceTier,
-			hideThinkingSummary: settings.get("hideThinkingBlock"),
+			hideThinkingSummary: shouldHideThinkingBlock(model, effectiveThinkingLevel, settings.get("hideThinkingBlock")),
 			kimiApiFormat: settings.get("providers.kimiApiFormat") ?? "anthropic",
 			preferWebsockets: preferOpenAICodexWebsockets,
 			getToolContext: tc => toolContextStore.getContext(tc),

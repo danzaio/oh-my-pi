@@ -286,6 +286,7 @@ export type AgentSessionEvent =
 	| { type: "todo_auto_clear" }
 	| { type: "irc_message"; message: CustomMessage }
 	| { type: "notice"; level: "info" | "warning" | "error"; message: string; source?: string }
+	| { type: "model_changed"; model: Model }
 	| {
 			type: "thinking_level_changed";
 			thinkingLevel: ThinkingLevel | undefined;
@@ -7206,6 +7207,7 @@ export class AgentSession {
 			this.#closeProviderSessionsForModelSwitch(currentModel, model);
 		}
 		this.agent.setModel(model);
+		this.#emit({ type: "model_changed", model });
 
 		// Re-evaluate append-only context mode — provider or setting may have changed
 		this.#syncAppendOnlyContext(model);

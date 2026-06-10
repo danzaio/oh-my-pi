@@ -29,7 +29,7 @@ import {
 import type { InteractiveModeContext } from "../../modes/types";
 import { type SessionInfo, SessionManager } from "../../session/session-manager";
 import { FileSessionStorage } from "../../session/session-storage";
-import { AUTO_THINKING, type ConfiguredThinkingLevel } from "../../thinking";
+import { AUTO_THINKING, type ConfiguredThinkingLevel, shouldHideThinkingBlock } from "../../thinking";
 import {
 	isImageProviderPreference,
 	isSearchProviderPreference,
@@ -278,17 +278,23 @@ export class SelectorController {
 					}
 				}
 				break;
-			case "hideThinking":
-				this.ctx.hideThinkingBlock = value as boolean;
-				this.ctx.session.agent.hideThinkingSummary = value as boolean;
+			case "hideThinking": {
+				const hideThinkingBlock = shouldHideThinkingBlock(
+					this.ctx.session.model,
+					this.ctx.session.thinkingLevel,
+					value as boolean,
+				);
+				this.ctx.hideThinkingBlock = hideThinkingBlock;
+				this.ctx.session.agent.hideThinkingSummary = hideThinkingBlock;
 				for (const child of this.ctx.chatContainer.children) {
 					if (child instanceof AssistantMessageComponent) {
-						child.setHideThinkingBlock(value as boolean);
+						child.setHideThinkingBlock(hideThinkingBlock);
 					}
 				}
 				this.ctx.chatContainer.clear();
 				this.ctx.rebuildChatFromMessages();
 				break;
+			}
 			case "theme": {
 				setTheme(value as string, true).then(result => {
 					this.ctx.statusLine.invalidate();

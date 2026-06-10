@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Hid thinking/reasoning artifacts from models known to ignore disabled reasoning when the session thinking level is `off`, including MiniMax and GLM-compatible model IDs ([#626](https://github.com/can1357/oh-my-pi/issues/626)).
+
 ## [15.11.0] - 2026-06-10
 
 ### Breaking Changes

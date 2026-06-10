@@ -18,6 +18,7 @@ import type { InteractiveModeContext, TodoPhase } from "../../modes/types";
 import type { PlanApprovalDetails } from "../../plan-mode/approved-plan";
 import type { AgentSessionEvent } from "../../session/agent-session";
 import { isSilentAbort, readPendingDisplayTag, resolveAbortLabel } from "../../session/messages";
+import { shouldHideThinkingBlock } from "../../thinking";
 import type { ResolveToolDetails } from "../../tools/resolve";
 import { interruptHint } from "../shared";
 import { StreamingRevealController } from "./streaming-reveal";
@@ -116,7 +117,12 @@ export class EventController {
 			todo_auto_clear: e => this.#handleTodoAutoClear(e),
 			irc_message: e => this.#handleIrcMessage(e),
 			notice: e => this.#handleNotice(e),
+			model_changed: async () => {
+				this.#syncThinkingVisibility();
+				this.ctx.ui.requestRender();
+			},
 			thinking_level_changed: async () => {
+				this.#syncThinkingVisibility();
 				this.ctx.statusLine.invalidate();
 				this.ctx.updateEditorBorderColor();
 				this.ctx.ui.requestRender();
@@ -133,6 +139,21 @@ export class EventController {
 		}
 		this.#ircExpiryTimers.clear();
 		this.#liveIrcCards.clear();
+	}
+
+	#syncThinkingVisibility(): void {
+		const hideThinkingBlock = shouldHideThinkingBlock(
+			this.ctx.session.model,
+			this.ctx.session.thinkingLevel,
+			this.ctx.settings.get("hideThinkingBlock"),
+		);
+		this.ctx.hideThinkingBlock = hideThinkingBlock;
+		this.ctx.session.agent.hideThinkingSummary = hideThinkingBlock;
+		for (const child of this.ctx.chatContainer.children) {
+			if (child instanceof AssistantMessageComponent) {
+				child.setHideThinkingBlock(hideThinkingBlock);
+			}
+		}
 	}
 
 	#resetReadGroup(): void {

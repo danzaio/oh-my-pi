@@ -78,6 +78,31 @@ export function shouldDisableReasoning(level: ThinkingLevel | undefined): boolea
 	return level === ThinkingLevel.Off;
 }
 
+const THINKING_OFF_IGNORING_PROVIDER_IDS = new Set(["minimax-code", "minimax-code-cn"]);
+const THINKING_OFF_IGNORING_MODEL_PATTERNS = [/\bglm[-_]?\d/i, /minimax/i];
+
+/**
+ * Some OpenAI-compatible reasoning models keep emitting thinking blocks even
+ * when the request asks to disable reasoning. When users selected `off`, hide
+ * those provider artifacts from the UI instead of showing unwanted thinking.
+ */
+export function shouldHideUnsupportedThinkingWhenOff(
+	model: Pick<Model, "id" | "provider"> | undefined,
+	level: ThinkingLevel | undefined,
+): boolean {
+	if (level !== ThinkingLevel.Off || !model) return false;
+	if (THINKING_OFF_IGNORING_PROVIDER_IDS.has(model.provider)) return true;
+	return THINKING_OFF_IGNORING_MODEL_PATTERNS.some(pattern => pattern.test(model.id));
+}
+
+export function shouldHideThinkingBlock(
+	model: Pick<Model, "id" | "provider"> | undefined,
+	level: ThinkingLevel | undefined,
+	configuredHideThinkingBlock: boolean,
+): boolean {
+	return configuredHideThinkingBlock || shouldHideUnsupportedThinkingWhenOff(model, level);
+}
+
 /**
  * Resolves a selector against the current model while preserving explicit "off".
  */

@@ -79,6 +79,7 @@ import { BUILTIN_SLASH_COMMAND_RESERVED_NAMES } from "../slash-commands/builtin-
 import { formatDuration } from "../slash-commands/helpers/format";
 import { STTController, type SttState } from "../stt";
 import { discoverTitleSystemPromptFile, resolvePromptInput } from "../system-prompt";
+import { shouldHideThinkingBlock } from "../thinking";
 import type { LspStartupServerInfo } from "../tools";
 import { normalizeLocalScheme } from "../tools/path-utils";
 import { setAutoQaConsentHandler } from "../tools/report-tool-issue";
@@ -453,7 +454,12 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.statusLine = new StatusLineComponent(session);
 		this.statusLine.setAutoCompactEnabled(session.autoCompactionEnabled);
 
-		this.hideThinkingBlock = settings.get("hideThinkingBlock");
+		this.hideThinkingBlock = shouldHideThinkingBlock(
+			session.model,
+			session.thinkingLevel,
+			settings.get("hideThinkingBlock"),
+		);
+		this.session.agent.hideThinkingSummary = this.hideThinkingBlock;
 
 		const hookCommands: SlashCommand[] = (
 			this.session.extensionRunner?.getRegisteredCommands(BUILTIN_SLASH_COMMAND_RESERVED_NAMES) ?? []
