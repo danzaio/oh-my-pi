@@ -43,7 +43,13 @@ export default function solPiOmpBridge(pi: ExtensionAPI): void {
 		// schema lacks `solPi.*` (stock omp); treat that as "untouched" so the
 		// file value wins and the bridge stays load-safe everywhere.
 		const view: SettingsView = {
-			get: path => manager.get(path as never) as unknown,
+			get: path => {
+				try {
+					return manager.get(path as never) as unknown;
+				} catch {
+					return undefined;
+				}
+			},
 			isConfigured: path => {
 				try {
 					return manager.isConfigured(path as never);
