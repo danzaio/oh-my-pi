@@ -119,3 +119,23 @@ enable it for logs that must stay local. The likely-secret detector is a
 precaution, not a complete scanner.
 
 Without configuring anything, all four mechanisms stay off.
+
+## Known divergences (bridge-only, no submodule/core patches)
+
+- Online Context Compact stays off on this host even when enabled: its module
+  imports `findCutPoint`/`sessionEntryToContextMessages` from the Pi root,
+  which OMP does not re-export (verified via headless smoke: enabling it
+  warns `SoL-Pi bridge: onlineContextCompact failed to load, leaving it off`
+  instead of breaking the session). Action Fusion, Observation Pack, and the
+  Evidence-Preserving Reducer resolve through existing shim symbols. Upstream
+  `tests/all-mechanisms.test.ts` still passes 4/4 inside the submodule
+  against Pi 0.84.2 — the gap is host API surface, not mechanism code.
+- The bridge reads settings through `SettingsManager.create()` and treats an
+  unknown-path throw as "untouched" (file wins), so it also loads clean on
+  stock `omp` without the `solPi.*` schema keys.
+- `npm run check` inside the submodule is red on Windows for environment
+  reasons only (all verified 2026-09-14, pin `2ecee02`): `package.test.ts`
+  shells `npm` without a shell (`spawnSync npm ENOENT` under vitest);
+  `observation-pack` symlink guards need symlink privilege (`EPERM`);
+  the Luna receipt test asserts POSIX `0o600` (Windows reports `0o666`).
+  `npm audit --audit-level=high` exits 0 (2 moderate vitest advisories).
