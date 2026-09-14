@@ -7,15 +7,13 @@ import {
 import { loadSolPiConfig } from "../../sol-pi/src/sol-pi/config";
 import { resolveSolPiConfig, type SettingsView } from "./resolve-config";
 
-// Path-keyed lazy loading: the extension graph hook only follows static
-// import/export edges, so lazy `await import()` of mechanism modules would
-// skip legacy-Pi specifier rewriting and fail at load. String literals here
-// name each mechanism entry for the static scanner (kept in sync by hand);
-// loading itself stays lazy per enabled flag so the all-off default evaluates
-// zero mechanism modules. A static `import` would instead pull all four
-// mechanisms into the entry graph and break all-off loading on this host
-// (notably `findCutPoint`, absent from the OMP root), which is exactly what
-// the path keys avoid.
+// Mechanism paths, one per SoL-Pi mechanism entry. Loading is lazy per
+// enabled flag through `loadMechanism` below, so the all-off default
+// evaluates zero mechanism modules and loads clean on stock and fork hosts.
+// (A plain static `import` of these entries would instead pull all four
+// mechanisms into the entry graph and break all-off loading on this host —
+// notably the Online Context Compact module, whose `findCutPoint` /
+// `sessionEntryToContextMessages` root imports OMP does not re-export.)
 const MECHANISM_PATHS = {
 	actionFusion: "../../sol-pi/src/sol-pi/extensions/action-fusion/index",
 	observationPack: "../../sol-pi/src/sol-pi/extensions/observation-pack/index",
@@ -26,15 +24,11 @@ const MECHANISM_PATHS = {
 /**
  * OMP bridge for SoL-Pi (fork-owned, no submodule/core patches).
  *
- * Mechanism modules load lazily per enabled flag through path-keyed dynamic
- * import (see MECHANISM_PATHS: string literals keep each entry visible to the
- * static scanner while a plain static `import` would pull all four mechanisms
- * into the entry graph and break all-off loading on this host). Each load is
- * wrapped in try/catch (failure warns and leaves that mechanism off). The
- * all-off default therefore evaluates zero mechanism modules and loads clean
- * on stock and fork hosts. The loader runs post-`Settings.init`, so a
- * `/settings` change takes effect from the next session — same granularity
- * as editing `sol-pi.json`.
+ * Actual registration stays gated per enabled flag in `session_start`, each
+ * load wrapped in try/catch (failure warns and leaves that mechanism off).
+ * The all-off default therefore registers nothing and loads clean on stock
+ * and fork hosts. The loader runs post-`Settings.init`, so a `/settings`
+ * change takes effect from the next session — same granularity as `sol-pi.json`.
  */
 export default function solPiOmpBridge(pi: ExtensionAPI): void {
 	pi.setLabel("SoL-Pi (OMP bridge)");
@@ -59,12 +53,11 @@ export default function solPiOmpBridge(pi: ExtensionAPI): void {
 			},
 		};
 		const config = resolveSolPiConfig(file, view);
-		// `Function("p", "return import(p)")` keeps the specifier out of the
-		// static graph scan (plain `await import(literal)` IS followed and
-		// would pull every mechanism into the entry graph, breaking all-off
-		// loading on this host); resolution still runs against the rewritten
-		// graph at runtime. Kept behind one helper so the indirection is
-		// visible and greppable rather than scattered per mechanism.
+		// `Function("path", "return import(path)")` keeps each specifier out of
+		// the static entry graph (a plain `await import(literal)` would pull all
+		// four mechanism modules into the entry graph and break all-off loading
+		// on this host); resolution still runs at runtime. One helper keeps the
+		// indirection visible and greppable rather than scattered per mechanism.
 		const loadMechanism = <T>(mechanism: keyof typeof MECHANISM_PATHS): Promise<T> =>
 			Function("path", "return import(path)")(MECHANISM_PATHS[mechanism]) as Promise<T>;
 		if (config.actionFusion) {
