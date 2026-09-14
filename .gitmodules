@@ -1,0 +1,3 @@
+[submodule "third-party/sol-pi"]
+	path = third-party/sol-pi
+	url = https://github.com/NVlabs/SoL-Pi.git
