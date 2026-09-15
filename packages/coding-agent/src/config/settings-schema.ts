@@ -6221,6 +6221,94 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"solPi.actionFusion": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "tools",
+			group: "Extensions",
+			label: "SoL-Pi Action Fusion",
+			description:
+				"Run an edit/write follow-up validation command in the same tool call. Keys left at default fall back to sol-pi.json, then built-in off.",
+		},
+	},
+
+	"solPi.observationPack": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "tools",
+			group: "Extensions",
+			label: "SoL-Pi Observation Pack",
+			description:
+				"Replace repeated large tool results with stable handles and exact paged recall. Keys left at default fall back to sol-pi.json, then built-in off.",
+		},
+	},
+
+	"solPi.evidencePreservingReducer": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "tools",
+			group: "Extensions",
+			label: "SoL-Pi Evidence-Preserving Reducer",
+			description:
+				"Compact long diagnostic logs into verified receipts. Keys left at default fall back to sol-pi.json, then built-in off.",
+			warning:
+				"Sends eligible log content to the configured reducer model via Pi-managed auth. Do not enable for logs that must stay local.",
+		},
+	},
+
+	"solPi.evidencePreservingReducerProvider": {
+		type: "string",
+		default: undefined,
+		ui: {
+			tab: "tools",
+			group: "Extensions",
+			label: "SoL-Pi Reducer Provider",
+			description: "Provider namespace for the reducer model. Empty uses sol-pi.json, else built-in openai-codex.",
+		},
+	},
+
+	"solPi.evidencePreservingReducerModel": {
+		type: "string",
+		default: undefined,
+		ui: {
+			tab: "tools",
+			group: "Extensions",
+			label: "SoL-Pi Reducer Model",
+			description: "Model id for the reducer. Empty uses sol-pi.json, else built-in gpt-5.6-luna.",
+		},
+	},
+
+	"solPi.onlineContextCompact": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "tools",
+			group: "Extensions",
+			label: "SoL-Pi Online Context Compact",
+			description:
+				"Compact completed plan steps via native compaction on economic/window-pressure checks. Keys left at default fall back to sol-pi.json, then built-in off.",
+		},
+	},
+
+	"solPi.cacheWriteReadRatio": {
+		type: "number",
+		default: 12.5,
+		ui: {
+			tab: "tools",
+			group: "Extensions",
+			label: "SoL-Pi Cache Write/Read Ratio",
+			description: "Single economic ratio for the compaction decision. Other values by hand-editing sol-pi.json.",
+			options: [
+				{ value: "0", label: "0 (cache write free)" },
+				{ value: "12.5", label: "12.5 (default)" },
+				{ value: "25", label: "25" },
+			],
+		},
+	},
+
 	"dev.autoqa": {
 		type: "boolean",
 		default: true,
@@ -6576,6 +6664,17 @@ export interface GcSettings {
 	retainNewestPerCwd: number;
 }
 
+/** SoL-Pi extension mechanisms (OMP bridge reads via the settings singleton). */
+export interface SolPiSettings {
+	actionFusion: boolean;
+	observationPack: boolean;
+	evidencePreservingReducer: boolean;
+	evidencePreservingReducerProvider: string | undefined;
+	evidencePreservingReducerModel: string | undefined;
+	onlineContextCompact: boolean;
+	cacheWriteReadRatio: number;
+}
+
 /** Map group prefix -> typed settings interface */
 export interface GroupTypeMap {
 	compaction: CompactionSettings;
@@ -6598,6 +6697,7 @@ export interface GroupTypeMap {
 	shellMinimizer: ShellMinimizerSettings;
 	codexResets: CodexResetsSettings;
 	gc: GcSettings;
+	solPi: SolPiSettings;
 }
 
 export type GroupPrefix = keyof GroupTypeMap;

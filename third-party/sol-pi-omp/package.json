@@ -1,0 +1,7 @@
+{
+	"name": "omp-sol-pi-bridge",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"omp": { "extensions": ["./src/index.ts"] }
+}
