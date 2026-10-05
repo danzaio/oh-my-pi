@@ -123,6 +123,83 @@ describe("search tools with external URL paths", () => {
 		expect(text).not.toContain("outside after");
 	});
 
+	it("search fetches an HTTPS URL's raw HTML when the path carries :raw", async () => {
+		// The marker lives in an attribute, so the rendered view of the same URL
+		// cannot match it: a hit proves `:raw` reached the fetch, and a miss with
+		// the selector dropped proves it was not silently searched rendered.
+		stubLoadPage(
+			[
+				"<html>",
+				"<body>",
+				'<p>rendered text</p><span data-marker="rawhtmlneedle">x</span>',
+				"</body>",
+				"</html>",
+			].join("\n"),
+			"text/html",
+		);
+		const tools = await createTools(createSession(testDir));
+		const tool = tools.find(entry => entry.name === "grep");
+		expect(tool).toBeDefined();
+
+		const raw = await tool!.execute("search-url-raw", {
+			pattern: "rawhtmlneedle",
+			path: "https://example.com/page.html:raw",
+		});
+		expect(resultText(raw)).toContain("rawhtmlneedle");
+
+		const rendered = await tool!.execute("search-url-rendered", {
+			pattern: "rawhtmlneedle",
+			path: "https://example.com/page.html",
+		});
+		expect(resultText(rendered)).not.toContain("rawhtmlneedle");
+	});
+
+	it("search still filters a raw URL by the line range beside its :raw chunk", async () => {
+		stubLoadPage(
+			[
+				"<html>",
+				"<body>",
+				'<p>rendered text</p><span data-marker="rawhtmlneedle">x</span>',
+				"</body>",
+				"</html>",
+			].join("\n"),
+			"text/html",
+		);
+		const tools = await createTools(createSession(testDir));
+		const tool = tools.find(entry => entry.name === "grep");
+		expect(tool).toBeDefined();
+
+		const outOfRange = await tool!.execute("search-url-raw-range-miss", {
+			pattern: "rawhtmlneedle",
+			path: "https://example.com/page.html:raw:1-2",
+		});
+		expect(resultText(outOfRange)).not.toContain("rawhtmlneedle");
+
+		const inRange = await tool!.execute("search-url-raw-range-hit", {
+			pattern: "rawhtmlneedle",
+			path: "https://example.com/page.html:raw:3-3",
+		});
+		expect(resultText(inRange)).toContain("rawhtmlneedle");
+	});
+
+	it("search keeps rejecting display selectors on filesystem paths", async () => {
+		stubLoadPage("remote body\n", "text/plain");
+		await fs.writeFile(path.join(testDir, "notes.txt"), "local needle\n");
+		const tools = await createTools(createSession(testDir));
+		const tool = tools.find(entry => entry.name === "grep");
+		expect(tool).toBeDefined();
+
+		for (const selector of ["raw", "conflicts", "raw:1-2"]) {
+			await expect(
+				tool!.execute("search-fs-display-sel", { pattern: "needle", path: `notes.txt:${selector}` }),
+			).rejects.toThrow('only line-range selectors like ":50-100" are supported');
+		}
+		// Two range groups are not a range grep can filter by either.
+		await expect(
+			tool!.execute("search-fs-multi-range", { pattern: "needle", path: "notes.txt:1-2:3-4" }),
+		).rejects.toThrow("Path not found: notes.txt:1-2");
+	});
+
 	it("ast_edit rejects external URLs instead of staging read-cache files", async () => {
 		stubLoadPage("legacyWrap(x, value)\n", "text/plain");
 		const tools = await createTools(createSession(testDir));

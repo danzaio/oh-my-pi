@@ -7292,8 +7292,30 @@ export class AgentSession implements SettingsScope {
 			this.#promptGeneration,
 			signal,
 			"queued",
-		);
+		).then(preparation => this.#announceQueuedSessionAgents(preparation));
 	};
+
+	/**
+	 * Ships the hidden session-agent notice with a queued delivery (#14093).
+	 *
+	 * A `^model` mention authorized while the agent streams is queued, so its turn
+	 * leaves through {@link #prepareQueuedUserMessages} — never the idle
+	 * `prompt()` path that used to be the only place taking the notice. Without
+	 * this the model reads `<model agent="m1" …/>` as plain text and concludes no
+	 * `m1` agent exists. Taken at commit time, the first instant the transcript
+	 * shows whether an earlier delivery already announced the agent, so an idle
+	 * prompt and a queued turn never announce the same pseudonym twice.
+	 */
+	#announceQueuedSessionAgents(preparation: QueuedMessagePreparation): QueuedMessagePreparation {
+		return {
+			commit: () => {
+				const prepared = preparation.commit();
+				if (!prepared) return undefined;
+				const notice = this.#tools.takeSessionAgentNotice();
+				return notice ? [...prepared, notice] : prepared;
+			},
+		};
+	}
 
 	/**
 	 * Stage extension results; committing them must remain synchronous with delivery validation.

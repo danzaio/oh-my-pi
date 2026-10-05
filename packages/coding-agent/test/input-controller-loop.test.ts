@@ -205,6 +205,10 @@ describe("loop mode interjections", () => {
 
 	it("parks the loop when a direct submission is consumed locally", async () => {
 		const { ctx, setLoopPrompt, pauseLoop, prompt, getLoopPrompt } = createLoopContext({ isStreaming: false });
+		// `/void-cmd` stands in for a real project command: only a command the
+		// harness registers may reach `session.prompt` (an unknown `/`-prefixed
+		// draft is refused in the composer instead).
+		ctx.fileSlashCommands.add("void-cmd");
 		prompt.mockResolvedValueOnce(false);
 		const controller = new InputController(ctx);
 		controller.setupEditorSubmitHandler();

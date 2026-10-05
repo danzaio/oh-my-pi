@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
-import type { Model } from "@oh-my-pi/pi-ai";
+import type { Context, Model } from "@oh-my-pi/pi-ai";
 import { Agent } from "@oh-my-pi/pi-agent-core";
 import { createMockModel } from "@oh-my-pi/pi-ai/providers/mock";
 import { buildModel } from "@oh-my-pi/pi-catalog/build";
@@ -7,7 +7,7 @@ import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import type { CustomMessage } from "@oh-my-pi/pi-coding-agent/session/messages";
+import { convertToLlm, type CustomMessage } from "@oh-my-pi/pi-coding-agent/session/messages";
 import { expandModelMentionTags } from "@oh-my-pi/pi-tui/prompt/model-mention-syntax";
 import {
 	MODEL_MENTION_ENTRY_TYPE,
@@ -56,6 +56,22 @@ afterEach(() => {
 	vi.restoreAllMocks();
 	auth.close();
 });
+
+/** Flattens a provider request into the text the model actually reads. */
+function deliveredText(context: Context): string {
+	const parts: string[] = [];
+	for (const message of context.messages) {
+		if (message.role !== "user" && message.role !== "developer") continue;
+		if (typeof message.content === "string") {
+			parts.push(message.content);
+			continue;
+		}
+		for (const part of message.content) {
+			if (part.type === "text") parts.push(part.text);
+		}
+	}
+	return parts.join("\n");
+}
 
 describe("model mentions", () => {
 	test("only user prompts authorize model agents before dispatch", async () => {
@@ -244,6 +260,98 @@ describe("model mentions", () => {
 			expect(agentSession.getQueuedMessages().steering).toEqual([]);
 		} finally {
 			agentSession.agent.state.isStreaming = false;
+			await agentSession.dispose();
+		}
+	});
+
+	/**
+	 * A mention submitted while the agent streams is authorized at enqueue time, so
+	 * the queued delivery — not a later idle prompt — is the last chance to tell the
+	 * orchestrator that the `m<N>` pseudonym exists. #14093: only the idle
+	 * `#promptWithMessage` path took the hidden notice, leaving a queued mention
+	 * readable as bare `<model agent="m1" .../>` text.
+	 */
+	for (const streamingBehavior of ["steer", "followUp"] as const) {
+		test(`a ${streamingBehavior} mention announces its m<N> agent in the same turn`, async () => {
+			vi.spyOn(registry, "getApiKey").mockResolvedValue("test-key");
+			const mock = createMockModel({
+				responses: [{ content: ["Investigating"] }, { content: ["Taking the queued turn"] }, { content: ["Done"] }],
+			});
+			const agent = new Agent({
+				getApiKey: () => "test-key",
+				initialState: { model: models[0], systemPrompt: ["Test"], tools: [], messages: [] },
+				convertToLlm,
+				streamFn: mock.stream,
+			});
+			const agentSession = new AgentSession({
+				agent,
+				sessionManager: session,
+				modelRegistry: registry,
+				settings: Settings.isolated({ "compaction.enabled": false }),
+			});
+			try {
+				// Submitting at the yield boundary guarantees the prompt is queued
+				// while a turn is actually in flight.
+				let queued: Promise<boolean> | undefined;
+				agent.setOnBeforeYield(() => {
+					queued ??= agentSession.prompt("use ^b/y", { streamingBehavior });
+				});
+				await agentSession.prompt("investigate the flaky build");
+				await queued;
+				await agentSession.waitForIdle();
+
+				expect(agentSession.getSessionAgents().map(candidate => candidate.name)).toEqual(["m1"]);
+				const last = mock.calls.at(-1);
+				if (!last) throw new Error("No model call was delivered");
+				const delivered = deliveredText(last.context);
+				expect(delivered).toContain('use <model agent="m1" name="Y"/>');
+				expect(delivered).toContain('<system-notice id="session-agents">');
+				expect(delivered).toContain("b/y");
+			} finally {
+				await agentSession.dispose();
+			}
+		});
+	}
+
+	test("a queued notice announces only what the idle prompt left unannounced", async () => {
+		vi.spyOn(registry, "getApiKey").mockResolvedValue("test-key");
+		const mock = createMockModel({
+			responses: [{ content: ["Investigating"] }, { content: ["Taking the steer"] }],
+		});
+		const agent = new Agent({
+			getApiKey: () => "test-key",
+			initialState: { model: models[0], systemPrompt: ["Test"], tools: [], messages: [] },
+			convertToLlm,
+			streamFn: mock.stream,
+		});
+		const agentSession = new AgentSession({
+			agent,
+			sessionManager: session,
+			modelRegistry: registry,
+			settings: Settings.isolated({ "compaction.enabled": false }),
+		});
+		try {
+			// One turn exercises both paths: the idle prompt admits m1, then the steer
+			// queued behind it admits m2.
+			let queued: Promise<boolean> | undefined;
+			agent.setOnBeforeYield(() => {
+				queued ??= agentSession.prompt("then use ^c/w", { streamingBehavior: "steer" });
+			});
+			await agentSession.prompt("ask ^b/y first");
+			await queued;
+			await agentSession.waitForIdle();
+
+			const notices = agent.state.messages.filter(
+				(message): message is CustomMessage =>
+					message.role === "custom" && message.customType === "session-agent-notice",
+			);
+			expect(notices.map(notice => notice.details)).toEqual([
+				{ added: ["m1"], removed: [] },
+				{ added: ["m2"], removed: [] },
+			]);
+			// The hidden notice stays out of the transcript the UI renders.
+			expect(notices.every(notice => notice.display === false)).toBe(true);
+		} finally {
 			await agentSession.dispose();
 		}
 	});

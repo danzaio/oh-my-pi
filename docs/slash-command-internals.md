@@ -200,6 +200,8 @@ The unified built-in registry is checked before `AgentSession.prompt(...)` in TU
 
 Built-in parsing splits at the first whitespace or colon, so `/model:opus` is a built-in invocation. Extension/custom/file parsing instead splits only at the first literal space, preserving names such as `plugin:command`. In the TUI, a built-in with arguments falls through when its spec does not declare `allowArgs`; the ACP dispatcher leaves argument validation to the handler.
 
+Once every consumer above has declined the draft, the TUI refuses a `/`-prefixed draft that no registry claims (`/foobar`), or a built-in that rejected its arguments (`/jobs foo`), instead of spending a model turn on it. The draft is returned to the composer for correction, and the refusal names the escape: a leading space (`  /usr/local/bin`) sends the draft as an ordinary message, so a prompt that happens to start with `/` is never unsendable. The check lives in [`src/slash-commands/resolve.ts`](../packages/coding-agent/src/slash-commands/resolve.ts) and is TUI-only; ACP/RPC still forwards unmatched `/` text to the prompt.
+
 After that boundary, `AgentSession.prompt(...)` processes slash input in this order when `expandPromptTemplates !== false`:
 
 1. **Extension commands** (`#tryExecuteExtensionCommand`)  

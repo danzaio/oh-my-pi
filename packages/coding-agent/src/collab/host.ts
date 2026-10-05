@@ -13,6 +13,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import * as fs from "node:fs/promises";
 import type { ImageContent, TextContent } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
+import { setCollabHostAuthor } from "@oh-my-pi/pi-tui/chat/user-message";
 import type {
 	BusChannel,
 	CollabUiRequest,
@@ -499,6 +500,10 @@ export class CollabHost {
 			throw new Error("relay connection closed during startup");
 		}
 		this.#registryPublication = publication;
+		// The room is live: the host's own prompts now render with the same
+		// `«name · host»` badge guests get, from the name `participants`
+		// already reports. Display-only, so it stays out of the prompt text.
+		setCollabHostAuthor(collabDisplayName(this.#ctx));
 	}
 
 	/**
@@ -543,6 +548,11 @@ export class CollabHost {
 		// A room that ended on its own (fatal relay close) reaches here without
 		// `#runStop`: leave the public slot before the first await as well.
 		if (this.#ctx.collabHost === this) this.#ctx.collabHost = undefined;
+		// Every end of a *started* room funnels here (explicit stop, or the fatal
+		// relay close that tore the room down on its own), so this is the one place
+		// the badge has to be dropped: once the room is gone a plain user bubble
+		// is a solo turn again.
+		setCollabHostAuthor(null);
 		const publication = this.#registryPublication;
 		this.#registryPublication = null;
 		if (publication) {

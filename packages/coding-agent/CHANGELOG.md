@@ -9,6 +9,12 @@
 ### Fixed
 
 - Fixed HTML export hanging when a session's subagent directory held a transcript named `..jsonl`; discovery now only descends into real child directories ([#13908](https://github.com/can1357/oh-my-pi/pull/13908) by [@H4vC](https://github.com/H4vC))
+- Fixed `grep` refusing an HTTPS path carrying `:raw` (or `:conflicts`) before fetching it, so a URL can now be searched in the same raw view `read` returns ([#14092](https://github.com/can1357/oh-my-pi/issues/14092)).
+- Fixed `grep` treating a semicolon-separated scope of internal URIs as one URI, so `artifact://4;artifact://5` searches every listed artifact ([#14091](https://github.com/can1357/oh-my-pi/issues/14091)).
+- Fixed slash-prefixed input naming no command (`/foobar`) being sent to the model: it is now refused in the composer with the draft left for correction. A leading space sends the draft as a message instead, so an absolute path such as `/etc/hosts` still works ([#14123](https://github.com/can1357/oh-my-pi/issues/14123)).
+- Fixed a `^` model mention submitted while the agent was streaming never announcing its `m<N>` agent to the model, so an orchestrator could not dispatch to it until a later prompt ([#14093](https://github.com/can1357/oh-my-pi/issues/14093)).
+- Fixed `omp gc --archive` leaving archived sessions behind in `session_titles`, which purged `history` and `session_recaps` but not titles ([#13930](https://github.com/can1357/oh-my-pi/issues/13930)).
+- Fixed session titles and recaps being written into a replaced `history.db` after a corruption quarantine, where they were accepted but unreadable for the rest of the session ([#13929](https://github.com/can1357/oh-my-pi/issues/13929)).
 
 ## [18.4.12] - 2026-10-02
 

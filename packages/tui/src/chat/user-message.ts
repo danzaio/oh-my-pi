@@ -1,6 +1,7 @@
 import { applyBackgroundToLine, padding, visibleWidth } from "../utils";
 import { type Component, Container } from "../tui";
 import { Disclosure } from "../components/disclosure";
+import { Text } from "../components/text";
 import { Markdown } from "../components/markdown";
 import { formatBytes } from "@oh-my-pi/pi-utils";
 import type { ImageContent } from "@oh-my-pi/pi-ai";
@@ -48,6 +49,30 @@ const OSC133_ZONE_END = "\x1b]133;B\x07";
 const OSC133_COMMAND_START = "\x1b]133;C\x07";
 const OSC133_COMMAND_DONE = "\x1b]133;D;0\x07";
 const OSC133_ZONE_CLOSE = OSC133_ZONE_END + OSC133_COMMAND_START + OSC133_COMMAND_DONE;
+
+/** Marker distinguishing the room's host from the guests beside it. */
+const COLLAB_HOST_ROLE = "host";
+let collabHostAuthorName: string | null = null;
+
+/**
+ * Publish the host's collab display name while a room is live, so plain user
+ * bubbles grow the same `«name · host»` badge guest prompts already carry
+ * through the `collab-prompt` custom message's `details.from`. Host prompts go
+ * through `session.prompt()` with no author field, which left guests reading
+ * them as anonymous system input interleaved with named guest turns.
+ *
+ * Display-only: the badge is drawn from this value alone and is never merged
+ * into the message text the model sees. `null` — every solo session, and a
+ * room that has ended — renders exactly as before.
+ */
+export function setCollabHostAuthor(name: string | null): void {
+	collabHostAuthorName = name?.trim() ? name.trim() : null;
+}
+
+/** The `«name · host»` badge for the current host author; `null` with no room. */
+export function collabHostBadgeLabel(): string | null {
+	return collabHostAuthorName === null ? null : `«${collabHostAuthorName} · ${COLLAB_HOST_ROLE}»`;
+}
 
 /** How a user bubble styles its prose and chips (see {@link userBubbleColor}). */
 export interface UserBubbleOptions {
@@ -117,6 +142,11 @@ export function userBubbleColor(
  * Component that renders a user message. Accepts an agent reaction badge
  * (see {@link ReactionTarget}) drawn right-aligned in the bubble's top padding row;
  * a live-steered message carries a `*` marker left-aligned in the same row.
+ *
+ * While a collab room is live the host's own prompt carries the same `«name»`
+ * badge a guest's does (see {@link setCollabHostAuthor}), so a reader can tell
+ * who asked what. The badge is drawn beside the bubble and never becomes part
+ * of {@link #text}.
  */
 export class UserMessageComponent extends Container implements ReactionTarget {
 	// Memoized OSC 133 zone wrapping keyed on the underlying container render
@@ -133,6 +163,8 @@ export class UserMessageComponent extends Container implements ReactionTarget {
 	readonly #imageLinks: readonly (string | undefined)[] | undefined;
 	/** Display text: image markers collapsed to chips and model mentions to their labels. */
 	readonly #text: string;
+	/** `«name · host»` while a collab room is live; `undefined` for a solo session. */
+	readonly #authorLabel: string | undefined;
 	/** Matches the composer tokens in {@link #text} (chips, skills, this message's mentions). */
 	readonly #tokens: RegExp;
 	#reaction: string | undefined;
@@ -161,6 +193,13 @@ export class UserMessageComponent extends Container implements ReactionTarget {
 		this.#imageLinks = options.imageLinks;
 		this.#text = text;
 		this.#tokens = composerTokenRegex(mentionLabels);
+		// Agent-attributed input is not the host's hand, so it never wears the badge.
+		this.#authorLabel = this.#synthetic ? undefined : (collabHostBadgeLabel() ?? undefined);
+		if (this.#authorLabel !== undefined) {
+			const authorText = new Text(theme.fg("accent", `\x1b[1m${this.#authorLabel}\x1b[22m ›`), 1, 0);
+			authorText.setIgnoreTight(true);
+			this.addChild(authorText);
+		}
 		const markdown = new Markdown(text, 1, 1, getMarkdownTheme(), {
 			bgColor,
 			color: userBubbleColor(options, this.#tokens),
@@ -246,7 +285,13 @@ export class UserMessageComponent extends Container implements ReactionTarget {
 		if (badges.length > 0)
 			children.push(node("row", { gap: "xs", justify: "end", role: "omp.user.badges" }, badges, "badges"));
 		this.#native = card(
-			{ role: this.#synthetic ? "omp.user.synthetic" : "omp.user", tone: this.#synthetic ? "muted" : "user" },
+			{
+				role: this.#synthetic ? "omp.user.synthetic" : "omp.user",
+				tone: this.#synthetic ? "muted" : "user",
+				// Same head shape the guest badge uses, so a host turn and a guest
+				// turn read as one kind of named speaker.
+				head: this.#authorLabel === undefined ? undefined : [span(`${this.#authorLabel} ›`, "accent strong")],
+			},
 			children,
 		);
 		return this.#native;
@@ -285,6 +330,25 @@ export class UserMessageComponent extends Container implements ReactionTarget {
 		this.#zoneSource = lines;
 		this.#zoneLines = wrapped;
 		return wrapped;
+	}
+
+	/**
+	 * The bubble's first prose row: what has to stay on screen when the
+	 * transcript's overflow layout keeps one row per block. Row 0 is the
+	 * bubble's padded top, and it is also where {@link render} opens the OSC
+	 * 133 prompt zone — repainting that row as the message's only row showed an
+	 * empty bar, and replayed `133;A` on every line a live bubble was shifted
+	 * across, which iTerm2 keeps as a staircase of prompt marks (#13835). The
+	 * rows come from the undecorated container, so the emergency row is never a
+	 * moving prompt marker.
+	 */
+	renderTranscriptBlockEmergencyRow(width: number): string | undefined {
+		const rows = super.render(width);
+		for (const row of rows) {
+			if (/\S/.test(Bun.stripANSI(row))) return row;
+		}
+		// Padding-only bubble: keep the row, just not the marker.
+		return rows[0];
 	}
 }
 

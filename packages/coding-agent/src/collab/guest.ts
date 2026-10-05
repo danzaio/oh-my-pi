@@ -22,6 +22,7 @@ import * as path from "node:path";
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { ImageContent } from "@oh-my-pi/pi-ai";
 import { getConfigRootDir, logger } from "@oh-my-pi/pi-utils";
+import { setCollabHostAuthor } from "@oh-my-pi/pi-tui/chat/user-message";
 import type { AgentHubRemote, AgentHubRemoteTranscript } from "@oh-my-pi/pi-tui/overlays/agent-hub";
 import type { InteractiveModeContext } from "../modes/types";
 import { AgentRegistry } from "../registry/agent-registry";
@@ -682,8 +683,14 @@ export class CollabGuestLink {
 	 * display and context-window math are native (no display-string overrides).
 	 * Pure agent-state mutation: session.setModel/setThinkingLevel would
 	 * persist entries and clamp to local credentials.
+	 *
+	 * Also publishes the host's display name for the `«name · host»` badge: a
+	 * replica's plain user messages are all the host's (guest prompts arrive as
+	 * `collab-prompt` custom messages carrying their own name), so guests see
+	 * the same author badge on host turns that they see on their own.
 	 */
 	#applyHostState(state: CollabSessionState): void {
+		setCollabHostAuthor(state.participants.find(participant => participant.role === "host")?.name ?? null);
 		const session = this.#ctx.session;
 		if (
 			state.model &&
@@ -856,6 +863,10 @@ export class CollabGuestLink {
 		// An already-running switch cannot be cancelled halfway through. Drain
 		// it before rollback; no queued frame may reactivate the replica later.
 		await this.#applyChain;
+		// The room is over for this link: drop the host badge before the local
+		// transcript is rebuilt, so restored local turns render as solo ones.
+		// A link a newer join already superseded leaves the badge to its owner.
+		if (this.#ctx.collabGuest === this) setCollabHostAuthor(null);
 		if (this.#replicaActivated) await this.#resumeLocalSession();
 		if (this.#ctx.collabGuest !== this) return false;
 		this.#ctx.collabGuest = undefined;

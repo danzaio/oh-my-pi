@@ -168,6 +168,17 @@ async function parsePathSpecs(rawEntries: readonly string[], cwd: string): Promi
 		if (!literalFilesystemMatch && split.sel) {
 			const parsed = parseLineRanges(split.sel);
 			if (!parsed) {
+				// External URL entries carry their display selector to the URL
+				// materializer, which peels it with `parseReadUrlTarget` and fetches
+				// the same view `read` returns (`:raw` → original HTML). Route them
+				// there instead of rejecting a selector the fetch path already
+				// understands (issue #14092); any line range in the compound still
+				// filters matches after materialization. Filesystem paths keep the
+				// rejection below — `raw`/`conflicts` name no byte range on disk.
+				if (isReadSelectorGrammar(split.sel) && parseReadUrlTarget(entry)) {
+					specs.push({ original: entry, clean: entry, ranges: selectorLineRanges(split.sel) });
+					continue;
+				}
 				throw new ToolError(
 					`path entry "${entry}" — only line-range selectors like ":50-100" are supported (no ":raw"/":conflicts")`,
 				);

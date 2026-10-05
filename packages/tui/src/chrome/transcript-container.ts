@@ -1059,6 +1059,8 @@ export class TranscriptContainer extends Container {
 	 * unrendered. Only its active blocks (few) and the newest settled block
 	 * offering an emergency row are rendered, so the summary count and the
 	 * surviving emergency row match a full walk without rendering the ledger.
+	 * Each surviving block is reduced to the one row that still speaks for it:
+	 * its declared emergency row when it has one, else its first row.
 	 */
 	#renderEmergency(
 		shown: readonly { entry: TranscriptEntry; index: number }[],
@@ -1140,17 +1142,29 @@ export class TranscriptContainer extends Container {
 		const output = hiddenActive > 0 ? [`${hiddenActive} more transcript blocks active`] : [];
 		const owners: (Component | undefined)[] = hiddenActive > 0 ? [undefined] : [];
 		for (const candidate of visible) {
+			const component = candidate.entry.component;
 			if (candidate === emergencyCandidate) {
 				output.push(emergencyRow ?? "");
-				owners.push(candidate.entry.component);
+				owners.push(component);
 				continue;
 			}
-			this.#setAllocation(candidate.entry.component, 1, frame);
+			this.#setAllocation(component, 1, frame);
+			// A block that names its own emergency row owns the one row this
+			// layout gives it: row 0 is only a stand-in, and for a block whose
+			// top row is chrome (a user bubble's padded top, carrying the OSC
+			// 133 prompt zone) or a superseded thought it is an empty bar
+			// instead of the message (#13835).
+			const declared = (component as Component & FinalizableBlock).renderTranscriptBlockEmergencyRow?.(width);
+			if (declared !== undefined) {
+				output.push(declared);
+				owners.push(component);
+				continue;
+			}
 			const rendered = this.#renderEntry(candidate.entry, width).slice(
 				this.#projectedEmittedRowCount(candidate.entry, candidate.index, width),
 			);
 			output.push(rendered[0] ?? "");
-			owners.push(candidate.entry.component);
+			owners.push(component);
 		}
 		const visibleOutput = output.slice(0, rows);
 		this.#commitViewportSpans(owners, visibleOutput.length);

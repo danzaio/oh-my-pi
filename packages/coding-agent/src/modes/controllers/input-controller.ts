@@ -47,6 +47,13 @@ import { pickRecentFocusableAgentId } from "./session-focus-controller";
 import { executeBuiltinSlashCommand, lookupBuiltinSlashCommand } from "../../slash-commands/builtin-registry";
 import { restoreDetachedDraft } from "../../slash-commands/helpers/draft";
 import { parseSlashCommand, parseSubcommand } from "../../slash-commands/helpers/parse";
+import {
+	isKnownSlashCommand,
+	isNonBuiltinSlashCommand,
+	rejectUnknownSlashCommand,
+	SLASH_ESCAPE_HINT,
+	type SlashCommandRegistry,
+} from "../../slash-commands/resolve";
 import { isTinyLocalModelKey } from "../../tiny/models";
 import { tinyTitleClient } from "../../tiny/title-client";
 import { resolveReadPath } from "../../tools/path-utils";
@@ -1048,6 +1055,11 @@ export class InputController {
 			}
 			if (bareSlashCommand) text = bareSlashCommand.command;
 
+			// Set when a command consumed the draft and handed back text to send as
+			// a prompt (`/force`, `/loop`): that text is a user message, not a
+			// second command, so it must not be re-resolved below.
+			let promptFromCommand = false;
+
 			// Handle built-in slash commands
 			if (text) {
 				this.#recordSlashCommandUsage(text);
@@ -1077,6 +1089,7 @@ export class InputController {
 					// Record the original slash command text so Up Arrow recalls
 					// "/loop 10 fix bug" rather than just "fix bug".
 					if (!shouldSkipHistory(text)) this.ctx.editor.addToHistory(text);
+					promptFromCommand = true;
 					text = slashResult;
 				}
 			}
@@ -1209,6 +1222,25 @@ export class InputController {
 					this.ctx.showError(error instanceof Error ? error.message : String(error));
 				}
 				return;
+			}
+
+			// Everything the harness can run has now had its turn. A slash draft
+			// that no registry claims (`/foobar`) is a typo, not prose, and a
+			// builtin that refused its arguments (`/jobs foo`) is the same class
+			// of mistake: reject locally instead of spending a turn on it. The
+			// draft goes back to the composer so it can be corrected.
+			//
+			// A leading space is the escape hatch `bareSlashCommands` already
+			// advertises: `  /usr/local/bin` is a path to talk about, not a
+			// command. `submittedText` is pre-trim, which is where that space lives.
+			// Without it every absolute-path prompt — `/etc/hosts` — is unsendable.
+			if (text?.startsWith("/") && !promptFromCommand && !/^\s/.test(submittedText)) {
+				const rejection = rejectUnknownSlashCommand(text, this.#slashCommandRegistry());
+				if (rejection) {
+					this.ctx.editor.setText(text);
+					this.ctx.showError(`${rejection}${SLASH_ESCAPE_HINT}`);
+					return;
+				}
 			}
 
 			// If streaming, use prompt() with steer behavior
@@ -1382,24 +1414,30 @@ export class InputController {
 			return { command: `/${folded}`, confirm: false };
 		}
 		if (!isSettingsInitialized() || !cfgBareSlashCommands.get(settings)) return undefined;
+		const registry = this.#slashCommandRegistry();
 		for (const token of folded === text ? [text] : [text, folded]) {
-			if (lookupBuiltinSlashCommand(token) || this.#isKnownNonBuiltinSlashCommandToken(token)) {
+			if (isKnownSlashCommand(token, registry)) {
 				return { command: `/${token}`, confirm: !emptySession && armed !== text };
 			}
 		}
 		return undefined;
 	}
 
-	/** Whether `token` names a skill, file, extension, custom, or prompt-template command. */
-	#isKnownNonBuiltinSlashCommandToken(token: string): boolean {
+	/**
+	 * The command registry the palette advertises — builtins plus every
+	 * extension, skill, file, custom, and prompt-template command — in the shape
+	 * the slash-command resolver consumes. Shared so command resolution can never
+	 * disagree with what the command picker offers.
+	 */
+	#slashCommandRegistry(): SlashCommandRegistry {
 		const session = this.ctx.session;
-		return (
-			this.ctx.skillCommands.has(token) ||
-			this.ctx.fileSlashCommands.has(token) ||
-			session.extensionRunner?.getCommand(token) !== undefined ||
-			session.customCommands.some(loaded => loaded.command.name === token) ||
-			session.promptTemplates.some(template => template.name === token)
-		);
+		return {
+			hasSkillCommand: token => this.ctx.skillCommands.has(token),
+			hasFileCommand: name => this.ctx.fileSlashCommands.has(name),
+			hasExtensionCommand: name => session.extensionRunner?.getCommand(name) !== undefined,
+			hasCustomCommand: name => session.customCommands.some(loaded => loaded.command.name === name),
+			hasPromptTemplate: name => session.promptTemplates.some(template => template.name === name),
+		};
 	}
 
 	/**
@@ -1849,7 +1887,8 @@ export class InputController {
 
 	/** Send editor text as a follow-up message (queued behind current stream). */
 	async handleFollowUp(): Promise<void> {
-		let text = this.#compactDraftImages(this.ctx.editor.getExpandedText().trim());
+		const submittedText = this.ctx.editor.getExpandedText();
+		let text = this.#compactDraftImages(submittedText.trim());
 		let images = this.ctx.editor.pendingImages.length > 0 ? [...this.ctx.editor.pendingImages] : undefined;
 		let imageLinks =
 			images && this.ctx.editor.pendingImageLinks.length > 0 ? [...this.ctx.editor.pendingImageLinks] : undefined;
@@ -1887,6 +1926,9 @@ export class InputController {
 			return;
 		}
 
+		// A command handed back a prompt to send; it must not be re-resolved below.
+		let promptFromCommand = false;
+
 		if (text) {
 			try {
 				const input =
@@ -1900,6 +1942,8 @@ export class InputController {
 					// Command handled but returned remaining text to use as prompt.
 					// Record the original slash command text so Up Arrow recalls it.
 					if (!shouldSkipHistory(text)) this.ctx.editor.addToHistory(text);
+					// That text is the user's message, not a second command.
+					promptFromCommand = true;
 					text = slashResult;
 				}
 			} catch (error) {
@@ -1914,6 +1958,18 @@ export class InputController {
 		// Ctrl+Enter (this handler) routes them as `followUp`.
 		if (text && (await this.#invokeSkillCommand(text, "followUp", images, imageLinks, true))) {
 			return;
+		}
+
+		// Same contract as the Enter path: a slash draft nothing can run is
+		// refused locally, the detached draft comes back with its attachments,
+		// and a leading space escapes the check (see `SLASH_ESCAPE_HINT`).
+		if (text?.startsWith("/") && !promptFromCommand && !/^\s/.test(submittedText)) {
+			const rejection = rejectUnknownSlashCommand(text, this.#slashCommandRegistry());
+			if (rejection) {
+				restoreDetachedDraft(this.ctx.editor, text, images, imageLinks);
+				this.ctx.showError(`${rejection}${SLASH_ESCAPE_HINT}`);
+				return;
+			}
 		}
 
 		// Hand the message back on dispatch failure (model/API-key validation,
@@ -2582,7 +2638,7 @@ export class InputController {
 		if (!text.startsWith("/")) return;
 		const token = text.slice(1).split(/\s+/, 1)[0] ?? "";
 		if (!token) return;
-		if (this.#isKnownNonBuiltinSlashCommandToken(token)) {
+		if (isNonBuiltinSlashCommand(token, this.#slashCommandRegistry())) {
 			commandUsage.record(token);
 			return;
 		}

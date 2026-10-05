@@ -672,7 +672,9 @@ async function tryDelimitedPathSplit(
 /**
  * Split one path-like entry whose multiple targets were flattened into one
  * string. Existing paths are kept intact, so real filenames containing spaces,
- * commas, or semicolons win over delimiter recovery.
+ * commas, or semicolons win over delimiter recovery. A `;` list whose parts are
+ * all internal URLs (`artifact://4;artifact://5`) splits the same way, whether or
+ * not the caller supplied a `routedUrlPredicate`.
  */
 export async function splitDelimitedPathEntry(
 	entry: string,
@@ -689,7 +691,15 @@ export async function splitDelimitedPathEntry(
 		const parts = await tryDelimitedPathSplit(normalizedEntry, cwd, splitter, "semicolon", "none");
 		return parts?.every(options.routedUrlPredicate) ? parts : null;
 	}
-	if (isInternalUrlPath(normalizedEntry)) return null;
+	if (isInternalUrlPath(normalizedEntry)) {
+		// `;` is the documented list delimiter here too: `artifact://44;artifact://43`
+		// is a two-target scope, not one opaque URI. Split it so every target is
+		// searched (issue #14091). A single URI whose opaque tail merely contains a
+		// `;` stays whole, because only an all-internal split wins.
+		if (!normalizedEntry.includes(";")) return null;
+		const parts = await tryDelimitedPathSplit(normalizedEntry, cwd, splitter, "semicolon", "none");
+		return parts?.every(part => isInternalUrlPath(part)) ? parts : null;
+	}
 	// A real POSIX file may contain a delimiter and a selector-shaped tail
 	// (`a;b:1-2`, `a b:1-2`). Preserve the raw entry whenever the full literal
 	// resolves — or is only ambiguous — so downstream literal-preferring

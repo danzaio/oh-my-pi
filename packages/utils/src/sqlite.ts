@@ -10,7 +10,15 @@ const BUSY_MAX_ATTEMPTS = 4;
 const BUSY_BASE_DELAY_MS = 100;
 const SQLITE_STORE_SUFFIXES = ["-wal", "-shm", "-journal", ""];
 
-type SqliteFileIdentity = string | null | undefined;
+/**
+ * Identity of the file behind a database path.
+ *
+ * `null` is a known-absent file; `undefined` is a path that could not be
+ * stat'd, which must never match a cached entry. Callers caching a handle
+ * across opens key on this, so a store replaced under an unchanged path
+ * invalidates the cached entry.
+ */
+export type SqliteFileIdentity = string | null | undefined;
 
 class SqliteAttemptFailure extends Error {
 	readonly original: unknown;
@@ -27,7 +35,11 @@ class SqliteAttemptFailure extends Error {
 	}
 }
 
-function sqliteFileIdentity(dbPath: string): SqliteFileIdentity {
+/**
+ * Identity of the file behind `dbPath`, used to detect a store that was
+ * replaced — quarantined and recreated — under an unchanged path.
+ */
+export function sqliteFileIdentity(dbPath: string): SqliteFileIdentity {
 	try {
 		const stat = fs.statSync(dbPath);
 		return `${stat.dev}:${stat.ino}:${stat.birthtimeMs}`;

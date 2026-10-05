@@ -315,6 +315,17 @@ describe("InputController orphaned submit", () => {
 				settings,
 				modelRegistry,
 				extensionRunner,
+				// `/custom-prompt` is a real prompt template here, so the controller
+				// forwards it to `prompt()` (which starts a title) instead of
+				// refusing it as an unknown command.
+				promptTemplates: [
+					{
+						name: "custom-prompt",
+						description: "Custom prompt template",
+						content: "$ARGUMENTS",
+						source: "(test)",
+					},
+				],
 			});
 			const titleSpy = vi.spyOn(session, "generateTitle").mockResolvedValue(null);
 			const { ctx, editor } = createContext(session);

@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added the host's display name badge (`«name · host»`) on host-authored prompts while a collab room is live, so guests can tell who wrote what; the badge is display-only and solo sessions are unchanged ([#14082](https://github.com/can1357/oh-my-pi/issues/14082)).
+
+### Fixed
+
+- Fixed a user message rendering as an empty bar in the one-row-per-block overflow transcript layout, and left stale iTerm2 prompt marks on every line the message moved through ([#13835](https://github.com/can1357/oh-my-pi/issues/13835)).
+
 ## [18.4.12] - 2026-10-02
 
 ### Changed
