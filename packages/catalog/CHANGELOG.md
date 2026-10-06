@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed Venice starting on the 2024-era `llama-3.3-70b` hardcoded as its default; the model Venice now tags `default` is used instead, with the committed id kept only as the offline fallback ([#14476](https://github.com/can1357/oh-my-pi/issues/14476)).
+
 ## [18.4.11] - 2026-10-02
 
 ### Fixed

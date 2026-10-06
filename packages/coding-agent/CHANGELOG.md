@@ -15,6 +15,9 @@
 - Fixed a `^` model mention submitted while the agent was streaming never announcing its `m<N>` agent to the model, so an orchestrator could not dispatch to it until a later prompt ([#14093](https://github.com/can1357/oh-my-pi/issues/14093)).
 - Fixed `omp gc --archive` leaving archived sessions behind in `session_titles`, which purged `history` and `session_recaps` but not titles ([#13930](https://github.com/can1357/oh-my-pi/issues/13930)).
 - Fixed session titles and recaps being written into a replaced `history.db` after a corruption quarantine, where they were accepted but unreadable for the rest of the session ([#13929](https://github.com/can1357/oh-my-pi/issues/13929)).
+- Fixed a multi-question `ask` dropping the ticked options when the user also typed an "Other" answer, so the model only saw the typed text; both are now reported ([#14369](https://github.com/can1357/oh-my-pi/issues/14369)).
+- Fixed auto-thinking giving up on a slow judge after a fixed 4s, which silently dropped the thinking level on a slow link or a cold local model; the budget is now tunable with `OMP_JUDGMENT_TIMEOUT_MS` or `OMP_AUTO_THINKING_TIMEOUT_MS` ([#14321](https://github.com/can1357/oh-my-pi/issues/14321)).
+- Fixed a read-only subagent being told to write a file it cannot write, with no mention of the tool that does work; the refusal now names `yield` as the way to return the content ([#14308](https://github.com/can1357/oh-my-pi/issues/14308)).
 
 ## [18.4.12] - 2026-10-02
 

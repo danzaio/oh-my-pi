@@ -1900,9 +1900,7 @@ describe("AskTool rich ask dialog", () => {
 		expect(result.details?.results?.[0]?.customInput).toBe("and two");
 		expect(result.content[0]?.type).toBe("text");
 		if (result.content[0]?.type === "text") {
-			expect(stripAnsi(result.content[0].text)).toBe(
-				'User answers:\nfirst: [one] + "and two"\nsecond: (cancelled)',
-			);
+			expect(stripAnsi(result.content[0].text)).toBe('User answers:\nfirst: [one] + "and two"\nsecond: (cancelled)');
 		}
 	});
 

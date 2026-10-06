@@ -560,10 +560,11 @@ describe("auto-thinking judgment timeout (#14321)", () => {
 
 		// A judge that never answers until aborted — exactly the slow-link / cold
 		// local-model stall the hardcoded 4000ms budget used to cut short.
-		vi.spyOn(ai, "completeSimple").mockImplementation((_model, _context, options) =>
-			new Promise((_resolve, reject) => {
-				options?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
-			}),
+		vi.spyOn(ai, "completeSimple").mockImplementation(
+			(_model, _context, options) =>
+				new Promise((_resolve, reject) => {
+					options?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+				}),
 		);
 
 		const authStorage = createInMemoryAuthStorage();
